@@ -37,11 +37,14 @@ jobs:
           import hashlib
           from pathlib import Path
 
-          packages = list(Path(".").rglob("AmrStream.cs3"))
+          packages = sorted(
+              p for p in Path(".").rglob("AmrStream.cs3")
+              if "build" in p.parts
+          )
 
           if len(packages) != 1:
               raise RuntimeError(
-                  f"Expected one AmrStream.cs3, found {len(packages)}"
+                  f"Expected one built AmrStream.cs3 under build output, found {len(packages)}"
               )
 
           package = packages[0]
@@ -55,6 +58,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: AmrStream-test-package
-          path: '**/AmrStream.cs3'
+          path: |
+            **/build/**/AmrStream.cs3
           if-no-files-found: error
           retention-days: 7
