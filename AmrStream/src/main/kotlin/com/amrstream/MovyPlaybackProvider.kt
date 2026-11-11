@@ -1,10 +1,11 @@
 package com.amrstream
 
 import com.lagradost.cloudstream3.app
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONObject
 import java.net.URLEncoder
 
 class MovyPlaybackProvider(
@@ -13,6 +14,7 @@ class MovyPlaybackProvider(
     override val providerName = "Movy"
 
     private data class Server(val id: String, val label: String, val bonus: Int)
+
     private val servers = listOf(
         Server("miami", "Miami", 300),
         Server("boise", "Boise", 250),
@@ -37,62 +39,93 @@ class MovyPlaybackProvider(
 
     override suspend fun getSources(movie: MovieIdentity): PlaybackSources {
         if (movie.tmdbId <= 0) return PlaybackSources()
-        val api = "https://api.wecollege.net"
-        val seedText = withTimeoutOrNull(8_000L) {
-            app.get("$api/seed?mediaId=${movie.tmdbId}", headers = requestHeaders).text
-        } ?: return PlaybackSources()
-        val seed = runCatching { JSONObject(seedText).optString("seed").takeIf(String::isNotBlank) }.getOrNull()
-            ?: return PlaybackSources()
 
+        val seed = fetchSeed(movie.tmdbId) ?: return PlaybackSources()
         val params = linkedMapOf(
-            "title" to encode(movie.title), // Movy's endpoint expects title pre-encoded, then query-encoded.
+            "title" to movie.title,
             "mediaType" to "movie",
             "year" to movie.year.takeIf { it > 0 }?.toString().orEmpty(),
+            "totalSeasons" to "",
             "episodeId" to "1",
             "seasonId" to "1",
             "tmdbId" to movie.tmdbId.toString(),
             "imdbId" to movie.imdbId
-        ).filterValues(String::isNotEmpty)
+        ).filterValues { it.isNotEmpty() }
 
-        val results = coroutineScope {
+        val serverResults = coroutineScope {
             servers.map { server ->
                 async {
-                    runCatching {
-                        withTimeoutOrNull(8_000L) {
-                            val query = params.entries.joinToString("&") { (key, value) ->
-                                "${encode(key)}=${encode(value)}"
-                            }
-                            val endpoint = "$api/${server.id}/sources?$query&enc=2&seed=${encode(seed)}"
-                            val response = app.get(endpoint, headers = requestHeaders)
-                            if (response.code !in 200..299) return@withTimeoutOrNull null
-                            val decoded = decoder.decode(response.text, seed, movie.tmdbId)
-                            SourceResponseParser.parse(decoded, "$providerName - ${server.label}")
-                                .copy(videos = SourceResponseParser.parse(decoded, "$providerName - ${server.label}").videos.map {
-                                    it.copy(referer = "https://www.movy.sx/")
-                                }) to server
-                        }
-                    }.getOrNull()
-                }
-            }.mapNotNull { it.await() }.flattenResults()
-        }
+                    val query = params.entries.joinToString("&") { (key, value) ->
+                        "${encode(key)}=${encode(value)}"
+                    }
+                    val endpoint = "https://api.wecollege.net/${server.id}/sources?$query&enc=2&seed=${encode(seed)}"
 
-        val videos = results.videos
+                    val response = withTimeoutOrNull(8_000L) {
+                        app.get(endpoint, headers = requestHeaders)
+                    } ?: return@async null
+
+                    if (response.code !in 200..299) return@async null
+                    val decoded = response.text.takeIf { it.isNotBlank() } ?: return@async null
+                    val parsed = runCatching {
+                        SourceResponseParser.parse(
+                            decoder.decode(decoded, seed, movie.tmdbId),
+                            "$providerName - ${server.label}"
+                        )
+                    }.getOrNull() ?: return@async null
+
+                    parsed to server
+                }
+            }.awaitAll()
+        }.filterNotNull()
+
+        val bonusesByServer = serverResults.associate { it.second.label to it.second.bonus }
+
+        val videos = serverResults
+            .flatMap { it.first.videos }
+            .map { it.copy(referer = "https://www.movy.sx/") }
             .distinctBy { it.url }
-            .sortedWith(compareByDescending<VideoSource> { score(it, results.serverBonuses[it.name.substringBefore(" - ").substringAfter("Movy - ")] ?: 0) }
-                .thenByDescending { it.quality })
-        val subtitles = results.subtitles.distinctBy { it.language.lowercase() to it.url }
+            .sortedWith(
+                compareByDescending<VideoSource> { scoreWithBonus(it, bonusesByServer) }
+                    .thenByDescending { it.quality }
+                    .thenBy { it.name }
+            )
+
+        val subtitles = serverResults
+            .flatMap { it.first.subtitles }
+            .filter { it.url.startsWith("https://") }
+            .distinctBy { it.language.lowercase() to it.url }
+
         return PlaybackSources(videos = videos, subtitles = subtitles)
     }
 
-    private data class Combined(val videos: List<VideoSource>, val subtitles: List<SubtitleSource>, val serverBonuses: Map<String, Int>)
+    private fun fetchSeed(mediaId: Int): String? {
+        val response = runCatching {
+            withTimeoutOrNull(8_000L) {
+                app.get("https://api.wecollege.net/seed?mediaId=$mediaId", headers = requestHeaders)
+            }
+        }.getOrNull() ?: return null
 
-    private fun List<Pair<PlaybackSources, Server>>.flattenResults(): Combined = Combined(
-        videos = flatMap { it.first.videos },
-        subtitles = flatMap { it.first.subtitles },
-        serverBonuses = associate { (sources, server) -> "${providerName} - ${server.label}" to server.bonus }
-    )
+        if (response.code !in 200..299) return null
+        val text = response.text.takeIf { it.isNotBlank() } ?: return null
+        return runCatching {
+            val json = org.json.JSONObject(text)
+            json.optString("seed", "").takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
 
-    private fun score(source: VideoSource, bonus: Int): Int = (source.quality.takeIf { it > 0 } ?: 720) + bonus
+    private fun scoreWithBonus(source: VideoSource, bonuses: Map<String, Int>): Int {
+        val serverLabel = sourceNameServerLabel(source.name) ?: return source.quality.takeIf { it > 0 } ?: 720
+        return (source.quality.takeIf { it > 0 } ?: 720) + (bonuses[serverLabel] ?: 0)
+    }
+
+    private fun sourceNameServerLabel(name: String): String? {
+        val withoutPrefix = name.removePrefix("$providerName - ")
+        return when {
+            withoutPrefix.contains(" - ") -> withoutPrefix.substringBeforeLast(" - ").trim().ifEmpty { null }
+            withoutPrefix.isBlank() -> null
+            else -> withoutPrefix.trim()
+        }
+    }
 
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 }
