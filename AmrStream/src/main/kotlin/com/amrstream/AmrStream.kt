@@ -36,7 +36,7 @@ class AmrStream(val context: Context) : MainAPI() {
     }
 }
 
-    private fun addVideoSource(
+    private suspend fun addVideoSource(
     sourceName: String,
     videoUrl: String,
     callback: (ExtractorLink) -> Unit
