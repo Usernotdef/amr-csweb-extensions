@@ -15,7 +15,12 @@ class JsonPlaybackProvider(
                 providerName
             )
         } catch (e: Exception) {
-            PlaybackSources()
-        }
+    android.util.Log.e(
+        "AmrStream",
+        "Failed to parse playback sources from $providerName",
+        e
+    )
+    PlaybackSources()
+}
     }
 }
