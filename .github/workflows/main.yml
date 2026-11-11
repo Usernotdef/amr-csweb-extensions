@@ -6,12 +6,6 @@ concurrency:
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-      - main
-    paths-ignore:
-      - '*.md'
 
 permissions:
   contents: write
