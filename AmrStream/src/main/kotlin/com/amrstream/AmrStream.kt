@@ -136,39 +136,46 @@ class AmrStream(val context: Context) : MainAPI() {
         val totalSeasons = databaseDetails.optInt("number_of_seasons", seasonsJson.length())
         val seasonDetails = coroutineScope {
             (0 until seasonsJson.length()).mapNotNull { index ->
-                val season = seasonsJson.optJSONObject(index) ?: return@mapNotNull null
-                val number = season.optInt("season_number", 0)
-                if (number <= 0) return@mapNotNull null
+                val seasonJson = seasonsJson.optJSONObject(index) ?: return@mapNotNull null
+                val seasonNumber = seasonJson.optInt("season_number", 0)
+                if (seasonNumber <= 0) return@mapNotNull null
                 async {
-                    val seasonJson = try { JSONObject(app.get("$databaseUrl/3/tv/$id/season/$number").text) }
+                    val seasonData = try { JSONObject(app.get("$databaseUrl/3/tv/$id/season/$seasonNumber").text) }
                     catch (_: Exception) { JSONObject() }
-                    Triple(number, season, seasonJson)
+                    Triple(seasonNumber, seasonJson, seasonData)
                 }
             }.awaitAll()
         }
-        val episodes = seasonDetails.flatMap { (seasonNumber, season, seasonData) ->
-            val array = seasonData.optJSONArray("episodes")
-            if (array != null && array.length() > 0) {
-                (0 until array.length()).mapNotNull { index ->
-                    val episode = array.optJSONObject(index) ?: return@mapNotNull null
-                    val episodeNumber = episode.optInt("episode_number", index + 1)
-                    val epTitle = episode.optString("name", "Episode $episodeNumber")
+        val episodes = seasonDetails.flatMap { (seasonNumber, seasonJson, seasonData) ->
+            val episodeArray = seasonData.optJSONArray("episodes")
+            if (episodeArray != null && episodeArray.length() > 0) {
+                (0 until episodeArray.length()).mapNotNull { index ->
+                    val episodeJson = episodeArray.optJSONObject(index) ?: return@mapNotNull null
+                    val episodeNumber = episodeJson.optInt("episode_number", index + 1)
+                    val episodeTitle = episodeJson.optString("name", "Episode $episodeNumber")
                     val payload = JSONObject()
                         .put("tmdbId", id).put("title", title).put("imdbId", imdbId).put("year", year)
                         .put("mediaType", "tv").put("season", seasonNumber).put("episode", episodeNumber)
                         .put("totalSeasons", totalSeasons).toString()
                     newEpisode(payload) {
-                        name = epTitle; season = seasonNumber; episode = episodeNumber
-                        posterUrl = imageUrl(episode.optString("still_path", "")) ?: poster
+                        name = episodeTitle
+                        this.season = seasonNumber
+                        this.episode = episodeNumber
+                        posterUrl = imageUrl(episodeJson.optString("still_path", "")) ?: poster
                     }
                 }
             } else {
-                (1..season.optInt("episode_count", 0)).map { episodeNumber ->
+                (1..seasonJson.optInt("episode_count", 0)).map { episodeNumber ->
                     val payload = JSONObject()
                         .put("tmdbId", id).put("title", title).put("imdbId", imdbId).put("year", year)
                         .put("mediaType", "tv").put("season", seasonNumber).put("episode", episodeNumber)
                         .put("totalSeasons", totalSeasons).toString()
-                    newEpisode(payload) { name = "Episode $episodeNumber"; season = seasonNumber; episode = episodeNumber; posterUrl = poster }
+                    newEpisode(payload) {
+                        name = "Episode $episodeNumber"
+                        this.season = seasonNumber
+                        this.episode = episodeNumber
+                        posterUrl = poster
+                    }
                 }
             }
         }.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }))

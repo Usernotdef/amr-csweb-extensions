@@ -1,4 +1,4 @@
-version = 9
+version = 10
 
 cloudstream {
     description = "Movy.sx movies, series and anime with playback and subtitles"
