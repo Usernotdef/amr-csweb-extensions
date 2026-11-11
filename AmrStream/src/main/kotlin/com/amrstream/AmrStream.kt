@@ -36,6 +36,27 @@ class AmrStream(val context: Context) : MainAPI() {
     }
 }
 
+    private fun addVideoSource(
+    sourceName: String,
+    videoUrl: String,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+
+    if (!videoUrl.startsWith("https://")) {
+        return false
+    }
+
+    callback(
+        newExtractorLink(
+            "AmrStream",
+            sourceName,
+            videoUrl
+        )
+    )
+
+    return true
+}
+    
     override suspend fun search(
         query: String
     ): List<SearchResponse> {
@@ -219,13 +240,11 @@ class AmrStream(val context: Context) : MainAPI() {
             )
         )
 
-        callback(
-            newExtractorLink(
-                "AmrStream",
-                "AmrStream - Playback Test",
-                testVideo
-            )
-        )
+    addVideoSource(
+    "AmrStream - Playback Test",
+    testVideo,
+    callback
+)
 
         return true
     }
