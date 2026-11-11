@@ -162,11 +162,24 @@ class AmrStream(val context: Context) : MainAPI() {
 }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        return false
-    }
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+
+    val testVideo =
+        "https://artplayer.org/assets/sample/video.mp4"
+
+    callback.invoke(
+        newExtractorLink(
+            "AmrStream",
+            "AmrStream - Playback Test",
+            testVideo
+        ) {
+            quality = Qualities.Unknown.value
+        }
+    )
+
+    return true
 }
