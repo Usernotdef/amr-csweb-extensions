@@ -161,14 +161,35 @@ class AmrStream(val context: Context) : MainAPI() {
     }
 }
 
-        override suspend fun loadLinks(
+    override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
 
-        val testVideo = "https://artplayer.org/assets/sample/video.mp4"
+        val testVideo =
+            "https://artplayer.org/assets/sample/video.mp4"
+
+        val englishSubtitles =
+            "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/subtitles/test-en.vtt"
+
+        val arabicSubtitles =
+            "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/subtitles/test-ar.vtt"
+
+        subtitleCallback(
+            SubtitleFile(
+                "English - Test",
+                englishSubtitles
+            )
+        )
+
+        subtitleCallback(
+            SubtitleFile(
+                "Arabic - Test",
+                arabicSubtitles
+            )
+        )
 
         callback(
             newExtractorLink(
