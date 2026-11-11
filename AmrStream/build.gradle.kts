@@ -1,14 +1,11 @@
-version = 6
+version = 7
 
 cloudstream {
-    description = "Experimental movie and series provider for CSWeb testing"
+    description = "Movy.sx movies with playback and subtitles"
     authors = listOf("Amr")
     language = "en"
 
     status = 1
 
-    tvTypes = listOf(
-        "Movie",
-        "TvSeries"
-    )
+    tvTypes = listOf("Movie")
 }
