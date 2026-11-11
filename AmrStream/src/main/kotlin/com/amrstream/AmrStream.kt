@@ -199,53 +199,47 @@ class AmrStream(val context: Context) : MainAPI() {
     }
 }
 
-    override suspend fun loadLinks(
+        override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        
-        val movieInfo = getMovieInfo(data)
 
-        if (movieInfo == null) {
+        val movieInfo = getMovieInfo(data) ?: return false
+
+        val movie = MovieIdentity(
+            tmdbId = movieInfo.optInt("tmdbId"),
+            imdbId = movieInfo.optString("imdbId"),
+            title = movieInfo.optString("title"),
+            year = movieInfo.optInt("year")
+        )
+
+        val provider = TestPlaybackProvider()
+
+        val sources = try {
+            provider.getSources(movie)
+        } catch (e: Exception) {
             return false
         }
 
-        val tmdbId = movieInfo.optInt("tmdbId")
-        val imdbId = movieInfo.optString("imdbId")
-        val movieTitle = movieInfo.optString("title")
-        val movieYear = movieInfo.optInt("year")
-        
-        val testVideo =
-            "https://artplayer.org/assets/sample/video.mp4"
-
-        val englishSubtitles =
-            "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/subtitles/test-en.vtt"
-
-        val arabicSubtitles =
-            "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/subtitles/test-ar.vtt"
-
-        subtitleCallback(
-            SubtitleFile(
-                "English - Test",
-                englishSubtitles
+        sources.subtitles.forEach { subtitle ->
+            subtitleCallback(
+                SubtitleFile(
+                    subtitle.language,
+                    subtitle.url
+                )
             )
-        )
+        }
 
-        subtitleCallback(
-            SubtitleFile(
-                "Arabic - Test",
-                arabicSubtitles
-            )
-        )
+        var success = false
 
-    addVideoSource(
-    "AmrStream - Playback Test",
-    testVideo,
-    callback
-)
+        sources.videos.forEach { video ->
+            if (addVideoSource(video.name, video.url, callback)) {
+                success = true
+            }
+        }
 
-        return true
+        return success
     }
 }
