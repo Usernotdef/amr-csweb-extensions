@@ -1,5 +1,7 @@
 package com.amrstream
 
+import android.util.Log
+
 class MovyPlaybackProvider(
     private val responseJson: String
 ) : PlaybackSourceProvider {
@@ -11,14 +13,36 @@ class MovyPlaybackProvider(
     ): PlaybackSources {
 
         return try {
-            SourceResponseParser.parse(
+            val parsed = SourceResponseParser.parse(
                 responseJson,
                 providerName
             )
+
+            val uniqueVideos = parsed.videos
+                .filter { it.url.startsWith("https://") }
+                .distinctBy { it.url }
+                .sortedWith(
+                    compareByDescending<VideoSource> {
+                        it.quality
+                    }.thenBy { it.name }
+                )
+
+            val uniqueSubtitles = parsed.subtitles
+                .filter { it.url.startsWith("https://") }
+                .distinctBy {
+                    it.language to it.url
+                }
+
+            PlaybackSources(
+                videos = uniqueVideos,
+                subtitles = uniqueSubtitles
+            )
+
         } catch (e: Exception) {
-            android.util.Log.e(
+
+            Log.e(
                 "AmrStream",
-                "Movy source parsing failed",
+                "Failed to process Movy playback sources",
                 e
             )
 
