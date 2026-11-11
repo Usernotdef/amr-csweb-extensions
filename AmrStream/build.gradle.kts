@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "Experimental movie and series provider for CSWeb testing"
