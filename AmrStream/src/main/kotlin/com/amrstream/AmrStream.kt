@@ -83,7 +83,7 @@ class AmrStream(val context: Context) : MainAPI() {
                 title
             }
 
-            val detailsUrl = "$databaseUrl/3/movie/$id"
+            val detailsUrl = "$mainUrl/movie/$id"
 
             movies.add(
                 newMovieSearchResponse(
@@ -98,10 +98,68 @@ class AmrStream(val context: Context) : MainAPI() {
     }
 
     override suspend fun load(
-        url: String
-    ): LoadResponse? {
-        return null
+    url: String
+): LoadResponse? {
+
+    val response = app.get(url)
+
+    if (response.code != 200) {
+        throw IllegalStateException(
+            "Movie page failed: HTTP ${response.code}"
+        )
     }
+
+    val pageData = response.document
+        .selectFirst("script[id=__NEXT_DATA__]")
+        ?.data()
+        ?.takeIf { it.isNotBlank() }
+        ?: throw IllegalStateException(
+            "Movie details were not found in the downloaded HTML"
+        )
+
+    val details = JSONObject(pageData)
+        .getJSONObject("props")
+        .getJSONObject("pageProps")
+        .getJSONObject("details")
+
+    if (details.optString("mediaType") != "movie") {
+        throw IllegalStateException(
+            "This test version supports movies only"
+        )
+    }
+
+    val title = details.optString("title", "").trim()
+
+    if (title.isBlank()) {
+        throw IllegalStateException(
+            "The movie details contain no title"
+        )
+    }
+
+    val posterPath = details.optString("poster", "")
+    val description = details.optString("desc", "")
+    val releaseYear = details.optInt("year", 0)
+
+    val moviePoster = when {
+        posterPath.startsWith("https://") -> posterPath
+        posterPath.startsWith("/") -> "$mainUrl$posterPath"
+        else -> null
+    }
+
+    return newMovieLoadResponse(
+        title,
+        url,
+        TvType.Movie,
+        details.toString()
+    ) {
+        posterUrl = moviePoster
+        plot = description
+
+        if (releaseYear > 0) {
+            year = releaseYear
+        }
+    }
+}
 
     override suspend fun loadLinks(
         data: String,
