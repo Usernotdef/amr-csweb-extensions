@@ -1,7 +1,6 @@
 package com.amrstream
 
 import com.lagradost.cloudstream3.app
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -79,7 +78,6 @@ class MovyPlaybackProvider(
         }.filterNotNull()
 
         val bonusesByServer = serverResults.associate { it.second.label to it.second.bonus }
-
         val videos = serverResults
             .flatMap { it.first.videos }
             .map { it.copy(referer = "https://www.movy.sx/") }
@@ -98,7 +96,7 @@ class MovyPlaybackProvider(
         return PlaybackSources(videos = videos, subtitles = subtitles)
     }
 
-    private fun fetchSeed(mediaId: Int): String? {
+    private suspend fun fetchSeed(mediaId: Int): String? {
         val response = runCatching {
             withTimeoutOrNull(8_000L) {
                 app.get("https://api.wecollege.net/seed?mediaId=$mediaId", headers = requestHeaders)
@@ -114,7 +112,8 @@ class MovyPlaybackProvider(
     }
 
     private fun scoreWithBonus(source: VideoSource, bonuses: Map<String, Int>): Int {
-        val serverLabel = sourceNameServerLabel(source.name) ?: return source.quality.takeIf { it > 0 } ?: 720
+        val serverLabel = sourceNameServerLabel(source.name)
+            ?: return source.quality.takeIf { it > 0 } ?: 720
         return (source.quality.takeIf { it > 0 } ?: 720) + (bonuses[serverLabel] ?: 0)
     }
 
