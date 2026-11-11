@@ -1,11 +1,13 @@
 package com.amrstream
 
+import android.util.Log
 import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
+import org.json.JSONObject
 
 class MovyPlaybackProvider(
     private val decoder: SourceDecoder = MovySourceDecoder()
@@ -39,9 +41,15 @@ class MovyPlaybackProvider(
     override suspend fun getSources(movie: MovieIdentity): PlaybackSources {
         if (movie.tmdbId <= 0) return PlaybackSources()
 
-        val seed = fetchSeed(movie.tmdbId) ?: return PlaybackSources()
+        val seed = fetchSeed(movie.tmdbId) ?: run {
+            Log.w("AmrStream", "Movy did not return a seed for TMDB ${movie.tmdbId}")
+            return PlaybackSources()
+        }
+
+        // Nuvio's Movy provider pre-encodes title before query-string encoding it again.
+        // Keep this double encoding: the source endpoint expects this exact parameter format.
         val params = linkedMapOf(
-            "title" to movie.title,
+            "title" to encode(movie.title),
             "mediaType" to "movie",
             "year" to movie.year.takeIf { it > 0 }?.toString().orEmpty(),
             "totalSeasons" to "",
@@ -59,19 +67,34 @@ class MovyPlaybackProvider(
                     }
                     val endpoint = "https://api.wecollege.net/${server.id}/sources?$query&enc=2&seed=${encode(seed)}"
 
-                    val response = withTimeoutOrNull(8_000L) {
-                        app.get(endpoint, headers = requestHeaders)
+                    val response = try {
+                        withTimeoutOrNull(8_000L) {
+                            app.get(endpoint, headers = requestHeaders)
+                        }
+                    } catch (e: Exception) {
+                        Log.w("AmrStream", "Movy ${server.label} request failed", e)
+                        null
                     } ?: return@async null
 
-                    if (response.code !in 200..299) return@async null
-                    val decoded = response.text.takeIf { it.isNotBlank() } ?: return@async null
-                    val parsed = runCatching {
+                    if (response.code !in 200..299) {
+                        Log.w("AmrStream", "Movy ${server.label} returned HTTP ${response.code}")
+                        return@async null
+                    }
+
+                    val payload = response.text.takeIf { it.isNotBlank() } ?: return@async null
+                    val parsed = try {
                         SourceResponseParser.parse(
-                            decoder.decode(decoded, seed, movie.tmdbId),
+                            decoder.decode(payload, seed, movie.tmdbId),
                             "$providerName - ${server.label}"
                         )
-                    }.getOrNull() ?: return@async null
+                    } catch (e: Exception) {
+                        Log.w("AmrStream", "Movy ${server.label} response decode/parse failed", e)
+                        return@async null
+                    }
 
+                    if (parsed.videos.isNotEmpty() || parsed.subtitles.isNotEmpty()) {
+                        Log.d("AmrStream", "Movy ${server.label}: ${parsed.videos.size} videos, ${parsed.subtitles.size} subtitles")
+                    }
                     parsed to server
                 }
             }.awaitAll()
@@ -93,22 +116,31 @@ class MovyPlaybackProvider(
             .filter { it.url.startsWith("https://") }
             .distinctBy { it.language.lowercase() to it.url }
 
+        Log.i("AmrStream", "Movy found ${videos.size} video links and ${subtitles.size} subtitles for TMDB ${movie.tmdbId}")
         return PlaybackSources(videos = videos, subtitles = subtitles)
     }
 
     private suspend fun fetchSeed(mediaId: Int): String? {
-        val response = runCatching {
+        val response = try {
             withTimeoutOrNull(8_000L) {
                 app.get("https://api.wecollege.net/seed?mediaId=$mediaId", headers = requestHeaders)
             }
-        }.getOrNull() ?: return null
+        } catch (e: Exception) {
+            Log.w("AmrStream", "Movy seed request failed", e)
+            null
+        } ?: return null
 
-        if (response.code !in 200..299) return null
+        if (response.code !in 200..299) {
+            Log.w("AmrStream", "Movy seed endpoint returned HTTP ${response.code}")
+            return null
+        }
         val text = response.text.takeIf { it.isNotBlank() } ?: return null
-        return runCatching {
-            val json = org.json.JSONObject(text)
-            json.optString("seed", "").takeIf { it.isNotBlank() }
-        }.getOrNull()
+        return try {
+            JSONObject(text).optString("seed", "").takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w("AmrStream", "Movy seed response was not valid JSON", e)
+            null
+        }
     }
 
     private fun scoreWithBonus(source: VideoSource, bonuses: Map<String, Int>): Int {
