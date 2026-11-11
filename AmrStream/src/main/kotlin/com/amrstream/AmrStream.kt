@@ -27,10 +27,26 @@ class AmrStream(val context: Context) : MainAPI() {
         null
     }
 
-    private fun posterUrl(path: String): String? = when {
-        path.startsWith("https://") || path.startsWith("http://") -> path
-        path.startsWith("/") -> "https://image.tmdb.org/t/p/w500$path"
-        else -> null
+    private fun posterUrl(path: String?): String? {
+        val value = path?.trim()?.takeIf { it.isNotEmpty() && it != "null" } ?: return null
+        return when {
+            value.startsWith("https://", ignoreCase = true) || value.startsWith("http://", ignoreCase = true) -> value
+            value.startsWith("//") -> "https:$value"
+            value.startsWith("/uploads/", ignoreCase = true) || value.startsWith("/storage/", ignoreCase = true) -> "$mainUrl$value"
+            value.startsWith("/") -> "https://image.tmdb.org/t/p/w500$value"
+            else -> null
+        }
+    }
+
+    private suspend fun lookupPoster(tmdbId: Int): String? {
+        return try {
+            val response = app.get("$databaseUrl/3/movie/$tmdbId")
+            if (response.code !in 200..299) return null
+            val json = JSONObject(response.text)
+            posterUrl(json.optString("poster_path", ""))
+        } catch (_: Exception) {
+            null
+        }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
@@ -75,7 +91,9 @@ class AmrStream(val context: Context) : MainAPI() {
             val title = item.optString("title", "").trim()
             if (id <= 0 || title.isBlank()) continue
             val year = item.optString("release_date", "").take(4).toIntOrNull()
-            movies.add(newMovieSearchResponse(if (year != null) "$title ($year)" else title, "$mainUrl/movie/$id", TvType.Movie))
+            movies.add(newMovieSearchResponse(if (year != null) "$title ($year)" else title, "$mainUrl/movie/$id", TvType.Movie) {
+                posterUrl = posterUrl(item.optString("poster_path", ""))
+            })
         }
         return movies
     }
@@ -88,10 +106,14 @@ class AmrStream(val context: Context) : MainAPI() {
         val details = JSONObject(pageData).getJSONObject("props").getJSONObject("pageProps").getJSONObject("details")
         if (details.optString("mediaType") != "movie") throw IllegalStateException("This version supports movies only")
         val title = details.optString("title", "").trim()
-        if (title.isBlank()) throw IllegalStateException("The movie details contain no title")
-        val posterPath = details.optString("poster", "")
+        if (title.isBlank()) throw IllegalStateException("Movie title is missing")
+
+        val tmdbId = details.optInt("tmdbId", url.substringAfterLast('/').toIntOrNull() ?: 0)
+        val poster = posterUrl(details.optString("poster", ""))
+            ?: if (tmdbId > 0) lookupPoster(tmdbId) else null
+
         return newMovieLoadResponse(title, url, TvType.Movie, details.toString()) {
-            posterUrl = posterUrl(posterPath)
+            posterUrl = poster
             plot = details.optString("desc", "")
             details.optInt("year", 0).takeIf { it > 0 }?.let { year = it }
         }
@@ -123,7 +145,7 @@ class AmrStream(val context: Context) : MainAPI() {
                 type = if (video.url.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
                 referer = video.referer ?: "$mainUrl/"
-                quality = video.quality.takeIf { it > 0 } ?: Qualities.Unknown.value
+                quality = video.quality.takeIf { it in 1..4320 } ?: Qualities.Unknown.value
                 headers = mapOf("Origin" to mainUrl)
             })
             found = true
