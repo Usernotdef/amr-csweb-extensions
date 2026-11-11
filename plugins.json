@@ -2,20 +2,20 @@
     {
         "url": "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/AmrStream.cs3",
         "status": 1,
-        "version": 7,
+        "version": 8,
         "name": "AmrStream",
         "internalName": "AmrStream",
         "authors": [
             "Amr"
         ],
         "description": "Experimental movie search and details. Playback is not implemented yet.",
-        "fileSize": 34345,
+        "fileSize": 35514,
         "repositoryUrl": "https://github.com/Usernotdef/amr-csweb-extensions",
         "language": "en",
         "tvTypes": [
             "Movie"
         ],
         "apiVersion": 1,
-        "fileHash": "sha256-c79014112729ffb2bae36863f55d7fd2b83cf388a84b602b15906b8bae4a5439"
+        "fileHash": "sha256-5a8f83bf26290d3dd84a0d50affcac4b0880effda14f7c49a00f8acba59d0bc3"
     }
 ]
