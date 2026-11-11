@@ -31,6 +31,26 @@ jobs:
       - name: Build AmrStream only
         run: ./gradlew :AmrStream:make --no-daemon --stacktrace
 
+      - name: Show package size and hash
+        shell: python
+        run: |
+          import hashlib
+          from pathlib import Path
+
+          packages = list(Path(".").rglob("AmrStream.cs3"))
+
+          if len(packages) != 1:
+              raise RuntimeError(
+                  f"Expected one AmrStream.cs3, found {len(packages)}"
+              )
+
+          package = packages[0]
+          content = package.read_bytes()
+
+          print(f"Package: {package}")
+          print(f"fileSize: {len(content)}")
+          print(f"fileHash: sha256-{hashlib.sha256(content).hexdigest()}")
+          
       - name: Save extension package
         uses: actions/upload-artifact@v6
         with:
