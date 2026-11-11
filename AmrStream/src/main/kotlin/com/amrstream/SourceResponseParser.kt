@@ -15,6 +15,18 @@ object SourceResponseParser {
         val subtitles = mutableListOf<SubtitleSource>()
         val seenUrls = mutableSetOf<String>()
 
+        val playlist = root.optString("playlist", "").trim()
+
+if (playlist.startsWith("https://") && seenUrls.add(playlist)) {
+    videos.add(
+        VideoSource(
+            name = "$providerName - Auto",
+            url = playlist,
+            quality = 0
+        )
+    )
+}
+        
         val sourceArray = root.optJSONArray("sources")
 
         if (sourceArray != null) {
