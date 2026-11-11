@@ -19,6 +19,23 @@ class AmrStream(val context: Context) : MainAPI() {
 
     private val databaseUrl = "https://db.wecollege.net"
 
+    private fun getMovieInfo(data: String): JSONObject? {
+    return try {
+        val movie = JSONObject(data)
+
+        val tmdbId = movie.optInt("tmdbId", 0)
+        val title = movie.optString("title", "")
+
+        if (tmdbId <= 0 || title.isBlank()) {
+            null
+        } else {
+            movie
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
     override suspend fun search(
         query: String
     ): List<SearchResponse> {
@@ -167,7 +184,18 @@ class AmrStream(val context: Context) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        
+        val movieInfo = getMovieInfo(data)
 
+        if (movieInfo == null) {
+            return false
+        }
+
+        val tmdbId = movieInfo.optInt("tmdbId")
+        val imdbId = movieInfo.optString("imdbId")
+        val movieTitle = movieInfo.optString("title")
+        val movieYear = movieInfo.optInt("year")
+        
         val testVideo =
             "https://artplayer.org/assets/sample/video.mp4"
 
