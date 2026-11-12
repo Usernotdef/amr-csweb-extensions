@@ -109,17 +109,21 @@ class AmrStream(val context: Context) : MainAPI() {
             val kind = if (isTv) "tv" else "movie"
             JSONObject(app.get("$databaseUrl/3/$kind/$id?append_to_response=external_ids").text)
         } catch (_: Exception) { JSONObject() }
-        // Posters/backdrops can arrive as bare TMDB paths ("/abc.jpg") without a leading
-        // domain, so try every plausible field name before giving up. This keeps the
-        // Continue Watching card from rendering without an image.
-        val poster = imageUrl(details.optString("poster", ""))
-            ?: imageUrl(details.optString("posterPath", ""))
-            ?: imageUrl(details.optString("poster_path", ""))
-            ?: imageUrl(databaseDetails.optString("poster_path", ""))
+        
+        // Extract poster with extensive fallbacks to ensure Continue Watching is never blank
         val backdrop = imageUrl(details.optString("backdrop", ""))
             ?: imageUrl(details.optString("backdropPath", ""))
             ?: imageUrl(details.optString("backdrop_path", ""))
             ?: imageUrl(databaseDetails.optString("backdrop_path", ""))
+        val poster = imageUrl(details.optString("poster", ""))
+            ?: imageUrl(details.optString("posterPath", ""))
+            ?: imageUrl(details.optString("poster_path", ""))
+            ?: imageUrl(details.optString("posterUrl", ""))
+            ?: imageUrl(details.optString("image", ""))
+            ?: imageUrl(details.optString("cover", ""))
+            ?: imageUrl(databaseDetails.optString("poster_path", ""))
+            ?: backdrop // last resort: a backdrop is better than a blank card
+            
         val description = details.optString("desc", "").ifBlank { databaseDetails.optString("overview", "") }
         val yearText = if (isTv) databaseDetails.optString("first_air_date", "") else databaseDetails.optString("release_date", "")
         val year = details.optInt("year", yearText.take(4).toIntOrNull() ?: 0)
@@ -168,8 +172,9 @@ class AmrStream(val context: Context) : MainAPI() {
                         name = episodeTitle
                         this.season = seasonNumber
                         this.episode = episodeNumber
-                        // Fall back to the series poster so Continue Watching always has an image.
-                        posterUrl = imageUrl(episodeJson.optString("still_path", "")) ?: poster
+                        // Force the Continue Watching card to use the main Show Poster 
+                        // instead of dark/low-quality episode screenshots.
+                        posterUrl = poster 
                     }
                 }
             } else {
