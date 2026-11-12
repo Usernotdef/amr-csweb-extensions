@@ -8,12 +8,15 @@
         "authors": [
             "Amr"
         ],
-        "description": "Experimental movie search and details. Playback is not implemented yet.",
+        "description": "Movy.sx movies, series and anime with playback and subtitles.",
         "fileSize": 45727,
         "repositoryUrl": "https://github.com/Usernotdef/amr-csweb-extensions",
         "language": "en",
         "tvTypes": [
-            "Movie"
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie"
         ],
         "apiVersion": 1,
         "fileHash": "sha256-e47b01dfd9041b5e01409697701a7d06c8970db7f828aca8859206fb6e8f4667"

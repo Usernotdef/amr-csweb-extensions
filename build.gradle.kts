@@ -52,13 +52,13 @@ subprojects {
     cloudstream {
         setRepo(
             System.getenv("GITHUB_REPOSITORY")
-                ?: "https://github.com/Abodabodd/re-3arabi/"
+                ?: "https://github.com/Usernotdef/amr-csweb-extensions/"
         )
-        authors = listOf("Abodabodd")
+        authors = listOf("Amr")
     }
 
     android {
-        namespace = "com.Abodabodd"
+        namespace = "com.amrstream"
 
         defaultConfig {
             minSdk = 21
