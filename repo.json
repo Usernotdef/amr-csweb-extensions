@@ -1,6 +1,6 @@
 {
     "name": "AmrStream",
-    "description": "AmrStream – Movy.sx movies, series and anime with playback and subtitles.",
+    "description": "AmrStream v10 – Movy.sx movies, series and anime with playback and subtitles.",
     "manifestVersion": 1,
     "pluginLists": [
         "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/plugins.json"

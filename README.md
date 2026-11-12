@@ -1,25 +1,22 @@
 # AmrStream
 
-A dedicated CloudStream extension for Movy.sx: movies, TV series, anime, and playback with subtitle support.
+AmrStream is a dedicated CloudStream extension for Movy.sx. It focuses on movie, TV series, and anime discovery with playback and subtitle support.
 
-## What it includes
+## What is included
 - Movie and TV metadata browsing
 - TV series and anime episode listings
-- Playback source resolution from Movy providers
-- Subtitle support from provider sources
-- Build automation for a clean AmrStream-only repository
-
-## Repository purpose
-This repository is intentionally kept focused on the AmrStream extension only. It is not a generic multi-plugin fork.
+- Provider-backed playback source resolution
+- Subtitle delivery from the provider response stream
+- A single-purpose repository layout for the working v10 implementation
 
 ## Build
 ```bash
 ./gradlew :AmrStream:make --no-daemon --stacktrace
 ```
 
-## Release manifest
-The repository manifest points to `plugins.json` and the built `AmrStream.cs3` package.
+## Repository status
+This project is kept as an AmrStream-only plugin repository and is not a general multi-plugin fork.
 
 ## Notes
-- The project is based on the working AmrStream v10 source.
-- This README is intentionally concise and project-specific.
+- The active implementation is the v10 working source in `AmrStream/src/main/kotlin/com/amrstream`.
+- Use the repository manifest (`repo.json`) and plugin manifest (`plugins.json`) to publish the built `AmrStream.cs3` package.
