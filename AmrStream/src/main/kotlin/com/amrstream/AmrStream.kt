@@ -100,25 +100,38 @@ class AmrStream(val context: Context) : MainAPI() {
         val pageData = response.document.selectFirst("script[id=__NEXT_DATA__]")?.data()?.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Media details were not found in the downloaded HTML")
         val details = JSONObject(pageData).getJSONObject("props").getJSONObject("pageProps").getJSONObject("details")
-        val id = details.optInt("tmdbId", url.substringAfterLast('/').toIntOrNull() ?: 0)
+        
+        // FIXED: Robust ID extraction that handles URL slugs like "/movie/12345-the-movie-name"
+        val id = details.optInt("tmdbId", 0).takeIf { it > 0 } 
+            ?: url.substringAfterLast('/').substringBefore('-').substringBefore('?').toIntOrNull() 
+            ?: 0
+            
         val isTv = details.optString("mediaType") == "tv" || url.contains("/tv/")
         val title = details.optString(if (isTv) "name" else "title", details.optString("title", "")).trim()
         if (id <= 0 || title.isBlank()) throw IllegalStateException("Media ID or title is missing")
 
         val databaseDetails = try {
             val kind = if (isTv) "tv" else "movie"
-            // Added language=en to match getMainPage and ensure the proxy returns full metadata
             JSONObject(app.get("$databaseUrl/3/$kind/$id?language=en&append_to_response=external_ids").text)
         } catch (_: Exception) { JSONObject() }
         
-        // If the primary TMDB proxy call failed or returned empty, these will be null
         val dbPoster = imageUrl(databaseDetails.optString("poster_path", ""))
         val dbBackdrop = imageUrl(databaseDetails.optString("backdrop_path", ""))
+
+        // NEW: Scrape the HTML directly for TMDB images as a bulletproof fallback (like Anime3rb does)
+        val htmlPoster = response.document.select("img").map { it.attr("src") }
+            .firstOrNull { it.contains("tmdb.org") || it.contains("/t/p/") || it.contains("image.tmdb.org") }
+            ?.let { if (it.startsWith("http")) it else if (it.startsWith("//")) "https:$it" else "https://image.tmdb.org$it" }
+            
+        val htmlBackdrop = response.document.select("img").map { it.attr("src") }
+            .firstOrNull { it.contains("backdrop") || it.contains("/original/") }
+            ?.let { if (it.startsWith("http")) it else if (it.startsWith("//")) "https:$it" else "https://image.tmdb.org$it" }
 
         val backdrop = imageUrl(details.optString("backdrop", ""))
             ?: imageUrl(details.optString("backdropPath", ""))
             ?: imageUrl(details.optString("backdrop_path", ""))
             ?: dbBackdrop
+            ?: htmlBackdrop
             
         val poster = imageUrl(details.optString("poster", ""))
             ?: imageUrl(details.optString("posterPath", ""))
@@ -128,7 +141,8 @@ class AmrStream(val context: Context) : MainAPI() {
             ?: imageUrl(details.optString("cover", ""))
             ?: imageUrl(details.optString("thumbnail", ""))
             ?: dbPoster
-            ?: backdrop // last resort: a backdrop is better than a blank card
+            ?: htmlPoster // The ultimate fallback: the actual image tag on the page
+            ?: backdrop 
             
         val description = details.optString("desc", "").ifBlank { databaseDetails.optString("overview", "") }
         val yearText = if (isTv) databaseDetails.optString("first_air_date", "") else databaseDetails.optString("release_date", "")
