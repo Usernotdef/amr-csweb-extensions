@@ -101,7 +101,6 @@ class AmrStream(val context: Context) : MainAPI() {
             ?: throw IllegalStateException("Media details were not found in the downloaded HTML")
         val details = JSONObject(pageData).getJSONObject("props").getJSONObject("pageProps").getJSONObject("details")
         
-        // FIXED: Robust ID extraction that handles URL slugs like "/movie/12345-the-movie-name"
         val id = details.optInt("tmdbId", 0).takeIf { it > 0 } 
             ?: url.substringAfterLast('/').substringBefore('-').substringBefore('?').toIntOrNull() 
             ?: 0
@@ -115,10 +114,10 @@ class AmrStream(val context: Context) : MainAPI() {
             JSONObject(app.get("$databaseUrl/3/$kind/$id?language=en&append_to_response=external_ids").text)
         } catch (_: Exception) { JSONObject() }
         
+        // TMDB images don't have hotlink protection, so we prioritize them for Continue Watching
         val dbPoster = imageUrl(databaseDetails.optString("poster_path", ""))
         val dbBackdrop = imageUrl(databaseDetails.optString("backdrop_path", ""))
 
-        // NEW: Scrape the HTML directly for TMDB images as a bulletproof fallback (like Anime3rb does)
         val htmlPoster = response.document.select("img").map { it.attr("src") }
             .firstOrNull { it.contains("tmdb.org") || it.contains("/t/p/") || it.contains("image.tmdb.org") }
             ?.let { if (it.startsWith("http")) it else if (it.startsWith("//")) "https:$it" else "https://image.tmdb.org$it" }
@@ -127,21 +126,22 @@ class AmrStream(val context: Context) : MainAPI() {
             .firstOrNull { it.contains("backdrop") || it.contains("/original/") }
             ?.let { if (it.startsWith("http")) it else if (it.startsWith("//")) "https:$it" else "https://image.tmdb.org$it" }
 
-        val backdrop = imageUrl(details.optString("backdrop", ""))
+        val backdrop = dbBackdrop
+            ?: htmlBackdrop
+            ?: imageUrl(details.optString("backdrop", ""))
             ?: imageUrl(details.optString("backdropPath", ""))
             ?: imageUrl(details.optString("backdrop_path", ""))
-            ?: dbBackdrop
-            ?: htmlBackdrop
             
-        val poster = imageUrl(details.optString("poster", ""))
+        // Prioritize TMDB images over Movy's CDN images to avoid 403 Forbidden errors on the TV
+        val poster = dbPoster
+            ?: htmlPoster
+            ?: imageUrl(details.optString("poster", ""))
             ?: imageUrl(details.optString("posterPath", ""))
             ?: imageUrl(details.optString("poster_path", ""))
             ?: imageUrl(details.optString("posterUrl", ""))
             ?: imageUrl(details.optString("image", ""))
             ?: imageUrl(details.optString("cover", ""))
             ?: imageUrl(details.optString("thumbnail", ""))
-            ?: dbPoster
-            ?: htmlPoster // The ultimate fallback: the actual image tag on the page
             ?: backdrop 
             
         val description = details.optString("desc", "").ifBlank { databaseDetails.optString("overview", "") }
@@ -151,10 +151,14 @@ class AmrStream(val context: Context) : MainAPI() {
             .ifBlank { databaseDetails.optJSONObject("external_ids")?.optString("imdb_id", "").orEmpty() }
             .ifBlank { details.optString("imdbId", "") }
 
+        // Define headers to bypass hotlink protection if a Movy URL is used
+        val headers = mapOf("Referer" to mainUrl)
+
         if (!isTv) {
             val data = JSONObject(details.toString()).put("tmdbId", id).put("imdbId", imdbId).put("year", year).toString()
             return newMovieLoadResponse(title, url, TvType.Movie, data) {
                 posterUrl = poster
+                posterHeaders = headers
                 backgroundPosterUrl = backdrop ?: poster
                 plot = description
                 if (year > 0) this.year = year
@@ -162,7 +166,7 @@ class AmrStream(val context: Context) : MainAPI() {
         }
 
         val seasonsJson = databaseDetails.optJSONArray("seasons") ?: details.optJSONArray("seasons") ?: return newTvSeriesLoadResponse(title, url, TvType.TvSeries, emptyList()) {
-            posterUrl = poster; backgroundPosterUrl = backdrop ?: poster; plot = description; if (year > 0) this.year = year
+            posterUrl = poster; posterHeaders = headers; backgroundPosterUrl = backdrop ?: poster; plot = description; if (year > 0) this.year = year
         }
         val totalSeasons = databaseDetails.optInt("number_of_seasons", seasonsJson.length())
         val seasonDetails = coroutineScope {
@@ -214,7 +218,11 @@ class AmrStream(val context: Context) : MainAPI() {
         val isAnime = details.optJSONArray("genres")?.let { genres -> (0 until genres.length()).any { genres.optJSONObject(it)?.optString("name")?.contains("animation", true) == true } } ?: false
         val tvType = if (isAnime) TvType.Anime else TvType.TvSeries
         return newTvSeriesLoadResponse(title, url, tvType, episodes) {
-            posterUrl = poster; backgroundPosterUrl = backdrop ?: poster; plot = description; if (year > 0) this.year = year
+            posterUrl = poster
+            posterHeaders = headers // Crucial for webOS to download the image
+            backgroundPosterUrl = backdrop ?: poster
+            plot = description
+            if (year > 0) this.year = year
         }
     }
 
