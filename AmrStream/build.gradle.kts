@@ -1,4 +1,4 @@
-version = 14
+version = 15
 cloudstream {
     description = "Movy.sx movies, series and anime with playback and subtitles"
     authors = listOf("Amr")
