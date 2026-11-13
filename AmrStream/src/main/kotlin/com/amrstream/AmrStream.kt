@@ -107,21 +107,27 @@ class AmrStream(val context: Context) : MainAPI() {
 
         val databaseDetails = try {
             val kind = if (isTv) "tv" else "movie"
-            JSONObject(app.get("$databaseUrl/3/$kind/$id?append_to_response=external_ids").text)
+            // Added language=en to match getMainPage and ensure the proxy returns full metadata
+            JSONObject(app.get("$databaseUrl/3/$kind/$id?language=en&append_to_response=external_ids").text)
         } catch (_: Exception) { JSONObject() }
         
-        // Extract poster with extensive fallbacks to ensure Continue Watching is never blank
+        // If the primary TMDB proxy call failed or returned empty, these will be null
+        val dbPoster = imageUrl(databaseDetails.optString("poster_path", ""))
+        val dbBackdrop = imageUrl(databaseDetails.optString("backdrop_path", ""))
+
         val backdrop = imageUrl(details.optString("backdrop", ""))
             ?: imageUrl(details.optString("backdropPath", ""))
             ?: imageUrl(details.optString("backdrop_path", ""))
-            ?: imageUrl(databaseDetails.optString("backdrop_path", ""))
+            ?: dbBackdrop
+            
         val poster = imageUrl(details.optString("poster", ""))
             ?: imageUrl(details.optString("posterPath", ""))
             ?: imageUrl(details.optString("poster_path", ""))
             ?: imageUrl(details.optString("posterUrl", ""))
             ?: imageUrl(details.optString("image", ""))
             ?: imageUrl(details.optString("cover", ""))
-            ?: imageUrl(databaseDetails.optString("poster_path", ""))
+            ?: imageUrl(details.optString("thumbnail", ""))
+            ?: dbPoster
             ?: backdrop // last resort: a backdrop is better than a blank card
             
         val description = details.optString("desc", "").ifBlank { databaseDetails.optString("overview", "") }
@@ -151,7 +157,7 @@ class AmrStream(val context: Context) : MainAPI() {
                 val seasonNumber = seasonJson.optInt("season_number", 0)
                 if (seasonNumber <= 0) return@mapNotNull null
                 async {
-                    val seasonData = try { JSONObject(app.get("$databaseUrl/3/tv/$id/season/$seasonNumber").text) }
+                    val seasonData = try { JSONObject(app.get("$databaseUrl/3/tv/$id/season/$seasonNumber?language=en").text) }
                     catch (_: Exception) { JSONObject() }
                     Triple(seasonNumber, seasonJson, seasonData)
                 }
@@ -173,7 +179,6 @@ class AmrStream(val context: Context) : MainAPI() {
                         this.season = seasonNumber
                         this.episode = episodeNumber
                         // Force the Continue Watching card to use the main Show Poster 
-                        // instead of dark/low-quality episode screenshots.
                         posterUrl = poster 
                     }
                 }
