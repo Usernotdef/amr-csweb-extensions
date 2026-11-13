@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/Usernotdef/amr-csweb-extensions/main/AmrStream.cs3",
         "status": 1,
-        "version": 14,
+        "version": 15,
         "name": "AmrStream",
         "internalName": "AmrStream",
         "authors": [
             "Amr"
         ],
         "description": "Movy.sx movies, series and anime with playback and subtitles.",
-        "fileSize": 46187,
+        "fileSize": 46521,
         "repositoryUrl": "https://github.com/Usernotdef/amr-csweb-extensions",
         "language": "en",
         "tvTypes": [
@@ -19,6 +19,6 @@
             "AnimeMovie"
         ],
         "apiVersion": 1,
-        "fileHash": "sha256-d0ac29208f41a5fa8fcc2f4a5655a8d5c51339d53b231bff1ce945d2b64538ba"
+        "fileHash": "sha256-f3a780ca7fdb7f94599d3a200173bdb19dd10fe0320f7b2e415504959f620030"
     }
 ]
